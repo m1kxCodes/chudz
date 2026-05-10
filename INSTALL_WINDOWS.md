@@ -9,7 +9,7 @@ Complete step-by-step guide to set up NoFilters Image Generator on Windows.
 - **Python 3.9 or higher**
 - **15GB+ free disk space** (for models)
 - **8GB+ RAM** (16GB+ recommended)
-- **NVIDIA GPU (optional but recommended)**
+- **AMD GPU with current Windows drivers (optional but recommended)**
 
 ### Step 1: Install Python
 
@@ -94,29 +94,34 @@ Or open the launcher: `launch.html`
 
 ## GPU Setup (Optional - Recommended)
 
-For much faster generation (10x faster), install NVIDIA CUDA:
+The backend supports both CUDA and DirectML. `config.ini` defaults to `device = auto`, which uses CUDA when the installed PyTorch build supports it, then DirectML, then CPU.
 
-### Check if you have NVIDIA GPU
-1. Right-click on desktop
-2. Look for "NVIDIA Control Panel" option
-3. If present, you have an NVIDIA GPU
+### Check if you have an AMD GPU
+1. Open Task Manager
+2. Go to Performance
+3. Check the GPU name and make sure AMD drivers are installed
 
-### Install CUDA Toolkit
+### Install DirectML PyTorch Dependencies
 
-1. Download CUDA 11.8 from: https://developer.nvidia.com/cuda-11-8-0-download-archive
-2. Run installer and follow prompts
-3. Install cuDNN (required for best performance):
-   - Download from: https://developer.nvidia.com/cudnn
-   - Extract to CUDA installation folder
-4. Reinstall PyTorch:
+1. Update AMD drivers through Windows Update or AMD Software
+2. Reinstall dependencies:
    ```powershell
    cd backend
-   pip install torch torchvision --force-reinstall
+   pip install -r requirements-directml.txt --upgrade --force-reinstall
+   ```
+
+### Install CUDA PyTorch Dependencies
+
+1. Install/update the NVIDIA driver
+2. Reinstall dependencies:
+   ```powershell
+   cd backend
+   pip install -r requirements-cuda.txt --upgrade --force-reinstall
    ```
 
 ### Verify GPU is working
 1. Start server as usual
-2. Check terminal output - should say "cuda" instead of "cpu"
+2. Check terminal output - should say "cuda" or "directml" instead of "cpu"
 3. In web interface, check top right for GPU info
 
 ## Troubleshooting
@@ -134,7 +139,7 @@ cd backend
 pip install -r requirements.txt --force-reinstall
 ```
 
-### "CUDA out of memory" error
+### "DirectML out of memory" error
 **Solution**: Reduce settings
 - Lower image size: 512 → 256
 - Lower steps: 50 → 20
