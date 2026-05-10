@@ -7,8 +7,14 @@ import os
 import uuid
 from datetime import datetime
 import torch
+try:
+    import torch_directml
+except ImportError:
+    torch_directml = None
 import diffusers
 import numpy as np
+import configparser
+import gc
 from diffusers import (
     AutoPipelineForImage2Image,
     AutoPipelineForText2Image,
@@ -36,6 +42,8 @@ app.add_middleware(
 # Configuration
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
+CONFIG = configparser.ConfigParser()
+CONFIG.read(PROJECT_ROOT / "config.ini")
 
 def resolve_project_path(path_value: str) -> Path:
     path = Path(path_value).expanduser()
@@ -52,7 +60,118 @@ VIDEO_MODEL_ID = os.getenv("VIDEO_MODEL_ID", "damo-vilab/text-to-video-ms-1.7b")
 CURRENT_MODEL_ID = SAFE_MODEL_ID
 CURRENT_NSFW_MODE = False
 PROMPT_ENHANCER_MODEL_ID = os.getenv("PROMPT_ENHANCER_MODEL", "google/flan-t5-base")
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+def config_value(section: str, option: str, default: str) -> str:
+    scoped_key = f"NOFILTERS_{section}_{option}".upper()
+    simple_key = f"NOFILTERS_{option}".upper()
+    return os.getenv(scoped_key) or os.getenv(simple_key) or CONFIG.get(section, option, fallback=default)
+
+def config_bool(section: str, option: str, default: bool) -> bool:
+    value = config_value(section, option, str(default)).strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+def normalize_device_name(value: str) -> str:
+    requested = (value or "auto").strip().lower()
+    aliases = {
+        "dml": "directml",
+        "direct-ml": "directml",
+        "nvidia": "cuda",
+        "gpu": "auto",
+    }
+    return aliases.get(requested, requested)
+
+RAW_REQUESTED_DEVICE = config_value("DEVICE", "device", "auto").strip().lower()
+REQUESTED_DEVICE = normalize_device_name(RAW_REQUESTED_DEVICE)
+DIRECTML_DEVICE_INDEX = config_value("DEVICE", "directml_device_index", "auto").strip().lower()
+USE_FLOAT16 = config_bool("OPTIMIZATION", "use_float16", True)
+
+def clean_device_name(value) -> str:
+    return str(value).replace("\x00", "").strip()
+
+def get_directml_device_index(prefer_amd: bool = False) -> int:
+    if DIRECTML_DEVICE_INDEX not in {"", "auto", "default"}:
+        try:
+            return int(DIRECTML_DEVICE_INDEX)
+        except ValueError:
+            print(f"Note: invalid DirectML device index '{DIRECTML_DEVICE_INDEX}', using auto selection.")
+
+    if prefer_amd and hasattr(torch_directml, "device_count") and hasattr(torch_directml, "device_name"):
+        for index in range(torch_directml.device_count()):
+            name = clean_device_name(torch_directml.device_name(index)).lower()
+            if "amd" in name or "radeon" in name:
+                return index
+
+    return torch_directml.default_device() if hasattr(torch_directml, "default_device") else 0
+
+def get_directml_device(prefer_amd: bool = False):
+    if torch_directml is None:
+        return None, None
+
+    try:
+        if hasattr(torch_directml, "is_available") and not torch_directml.is_available():
+            return None, None
+
+        device_index = get_directml_device_index(prefer_amd)
+        try:
+            device = torch_directml.device(device_index)
+        except TypeError:
+            device = torch_directml.device()
+
+        device_name = "DirectML GPU"
+        if hasattr(torch_directml, "device_name"):
+            try:
+                device_name = clean_device_name(torch_directml.device_name(device_index))
+            except Exception:
+                device_name = "DirectML GPU"
+        return device, device_name
+    except Exception as e:
+        print(f"Note: DirectML device unavailable: {e}")
+        return None, None
+
+def select_device():
+    if REQUESTED_DEVICE == "cpu":
+        return torch.device("cpu"), "cpu", "CPU"
+
+    if REQUESTED_DEVICE == "cuda":
+        if torch.cuda.is_available():
+            return torch.device("cuda"), "cuda", torch.cuda.get_device_name(0)
+        print("Note: CUDA was requested but is not available, falling back to CPU.")
+        return torch.device("cpu"), "cpu", "CPU"
+
+    if REQUESTED_DEVICE in {"amd", "directml"}:
+        directml_device, directml_name = get_directml_device(prefer_amd=REQUESTED_DEVICE == "amd")
+        if directml_device is not None:
+            return directml_device, "directml", directml_name
+        print("Note: DirectML was requested but torch-directml is unavailable, falling back to CPU.")
+        return torch.device("cpu"), "cpu", "CPU"
+
+    if torch.cuda.is_available():
+        return torch.device("cuda"), "cuda", torch.cuda.get_device_name(0)
+
+    directml_device, directml_name = get_directml_device(prefer_amd=True)
+    if directml_device is not None:
+        return directml_device, "directml", directml_name
+
+    return torch.device("cpu"), "cpu", "CPU"
+
+TORCH_DEVICE, DEVICE, DEVICE_NAME = select_device()
+
+def is_cuda_device() -> bool:
+    return DEVICE == "cuda"
+
+def is_gpu_device() -> bool:
+    return DEVICE in {"cuda", "directml"}
+
+def clear_accelerator_cache():
+    gc.collect()
+    if is_cuda_device():
+        torch.cuda.empty_cache()
+    elif DEVICE == "directml" and torch_directml is not None and hasattr(torch_directml, "empty_cache"):
+        torch_directml.empty_cache()
+
+def make_generator(seed: int):
+    generator_device = "cuda" if is_cuda_device() else "cpu"
+    return torch.Generator(device=generator_device).manual_seed(seed)
 
 # Some newer SDXL checkpoints name this scheduler in model_index.json, but the
 # pinned Diffusers version does not expose it. DPMSolver is compatible enough for
@@ -128,16 +247,16 @@ def load_models(model_id: Optional[str] = None):
     if text2img_pipe is not None and img2img_pipe is not None and CURRENT_MODEL_ID == model_id:
         return
     
-    print(f"Loading models on {DEVICE}...")
+    print(f"Loading models on {DEVICE} ({DEVICE_NAME})...")
     print(f"Model: {model_id}")
 
     text2img_pipe = None
     img2img_pipe = None
     inpaint_pipe = None
 
-    if DEVICE == "cuda":
+    if is_gpu_device():
         video_pipe = None
-        torch.cuda.empty_cache()
+        clear_accelerator_cache()
 
     def load_compatible_scheduler():
         try:
@@ -154,7 +273,7 @@ def load_models(model_id: Optional[str] = None):
             print(f"Note: DPMSolverMultistepScheduler not compatible, using model's default scheduler: {e}")
             # Keep the original scheduler if DPMSolver isn't compatible
         
-        pipe.to(DEVICE)
+        pipe.to(TORCH_DEVICE)
         pipe.enable_attention_slicing()
         return pipe
 
@@ -171,7 +290,7 @@ def load_models(model_id: Optional[str] = None):
         return kwargs
 
     load_attempts = []
-    if DEVICE == "cuda":
+    if is_gpu_device() and USE_FLOAT16:
         load_attempts.append(build_pipeline_kwargs(torch.float16, use_safetensors=True, variant="fp16"))
     load_attempts.append(build_pipeline_kwargs(torch.float32, use_safetensors=True))
     load_attempts.append(build_pipeline_kwargs(torch.float32, use_safetensors=None))
@@ -210,8 +329,8 @@ def unload_image_models():
     text2img_pipe = None
     img2img_pipe = None
     inpaint_pipe = None
-    if DEVICE == "cuda":
-        torch.cuda.empty_cache()
+    if is_gpu_device():
+        clear_accelerator_cache()
 
 def load_video_model():
     """Load the text-to-video model on first use."""
@@ -220,17 +339,17 @@ def load_video_model():
     if video_pipe:
         return video_pipe
 
-    if DEVICE == "cuda":
+    if is_gpu_device():
         unload_image_models()
 
-    print(f"Loading video model on {DEVICE}...")
+    print(f"Loading video model on {DEVICE} ({DEVICE_NAME})...")
     print(f"Video model: {VIDEO_MODEL_ID}")
 
     pipeline_kwargs = {
-        "torch_dtype": torch.float16 if DEVICE == "cuda" else torch.float32,
+        "torch_dtype": torch.float16 if is_gpu_device() and USE_FLOAT16 else torch.float32,
     }
 
-    if DEVICE == "cuda":
+    if is_gpu_device() and USE_FLOAT16:
         pipeline_kwargs["variant"] = "fp16"
 
     try:
@@ -251,15 +370,15 @@ def load_video_model():
     if hasattr(pipe, "enable_vae_slicing"):
         pipe.enable_vae_slicing()
 
-    if DEVICE == "cuda":
+    if is_cuda_device():
         try:
             pipe.enable_model_cpu_offload()
             print("Video model CPU offload enabled.")
         except Exception as e:
             print(f"Note: video CPU offload unavailable, moving model to CUDA: {e}")
-            pipe.to(DEVICE)
+            pipe.to(TORCH_DEVICE)
     else:
-        pipe.to(DEVICE)
+        pipe.to(TORCH_DEVICE)
 
     video_pipe = pipe
     print("Video model loaded successfully!")
@@ -462,8 +581,9 @@ async def status():
     """Get generation status and device info"""
     return {
         "device": DEVICE,
-        "gpu_available": torch.cuda.is_available(),
-        "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "requested_device": RAW_REQUESTED_DEVICE,
+        "gpu_available": is_gpu_device(),
+        "gpu_name": DEVICE_NAME if is_gpu_device() else None,
         "model": CURRENT_MODEL_ID,
         "nsfw_mode": CURRENT_NSFW_MODE,
         "video_model": VIDEO_MODEL_ID,
@@ -540,7 +660,7 @@ async def generate_image(request: GenerationRequest):
             await asyncio.to_thread(ensure_image_models_loaded)
         
         def generate():
-            generator = torch.Generator(device=DEVICE).manual_seed(int(datetime.now().timestamp() * 1000) % (2**31))
+            generator = make_generator(int(datetime.now().timestamp() * 1000) % (2**31))
             
             images = []
             for i in range(request.num_images):
@@ -599,7 +719,7 @@ async def generate_batch(request: GenerationRequest):
         def generate():
             images = []
             for i in range(request.num_images):
-                generator = torch.Generator(device=DEVICE).manual_seed(i)
+                generator = make_generator(i)
                 image = text2img_pipe(
                     prompt=request.prompt,
                     negative_prompt=request.negative_prompt,
@@ -657,7 +777,7 @@ async def generate_video(request: VideoGenerationRequest):
         pipe = await asyncio.to_thread(load_video_model)
 
         def generate():
-            generator = torch.Generator(device=DEVICE).manual_seed(int(datetime.now().timestamp() * 1000) % (2**31))
+            generator = make_generator(int(datetime.now().timestamp() * 1000) % (2**31))
             with torch.inference_mode():
                 output = pipe(
                     prompt=prompt,
@@ -681,8 +801,8 @@ async def generate_video(request: VideoGenerationRequest):
                     filepath.unlink()
                 raise
             finally:
-                if DEVICE == "cuda":
-                    torch.cuda.empty_cache()
+                if is_gpu_device():
+                    clear_accelerator_cache()
             return filename
 
         filename = await asyncio.to_thread(generate)
@@ -729,7 +849,7 @@ async def create_variation(file: UploadFile = File(...), request_data: Optional[
             prompt = "a beautiful high quality image"
 
         def generate():
-            generator = torch.Generator(device=DEVICE).manual_seed(int(datetime.now().timestamp() * 1000) % (2**31))
+            generator = make_generator(int(datetime.now().timestamp() * 1000) % (2**31))
 
             images = []
             with torch.inference_mode():
