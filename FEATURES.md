@@ -235,7 +235,7 @@ Result: ~15 seconds with GPU, ~2 minutes with CPU
 - ✓ Reduce steps (50 → 20-30)
 - ✓ Reduce image size (512 → 256)
 - ✓ Reduce guidance scale (7.5 → 5)
-- ✓ Install GPU drivers (CUDA)
+- ✓ Install current GPU drivers (AMD DirectML or NVIDIA CUDA)
 
 ### Server is running slowly
 - ✓ Close other applications
