@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NoFilters Image Studio</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>NoFilters Image Studio</h1>
+                <p class="subtitle">SDXL image generation with prompt enhancement and local gallery management</p>
+            </div>
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <div class="device-info" id="deviceInfo"></div>
+                <div class="nsfw-controls" style="display: flex; gap: 10px; align-items: center; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+                        <input type="checkbox" id="nsfwToggle" style="cursor: pointer;">
+                        <span>NSFW Mode</span>
+                    </label>
+                    <select id="nsfwModelSelect" style="padding: 6px; border-radius: 4px; border: 1px solid #666; background: #1e1e1e; color: #fff; cursor: pointer; display: none;">
+                        <option value="big_lust">Big Lust v1.6</option>
+                        <option value="option2">Stable Diffusion 2.1</option>
+                    </select>
+                    <div id="nsfwStatus" style="font-size: 12px; color: #888;"></div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="generate">Generate</button>
+                <button class="tab-btn" data-tab="video">Video</button>
+                <button class="tab-btn" data-tab="batch">Batch</button>
+                <button class="tab-btn" data-tab="variation">Variations</button>
+                <button class="tab-btn" data-tab="gallery">Gallery</button>
+            </div>
+
+            <div id="generate" class="tab-content active">
+                <div class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>Text to Image</h2>
+                            <p>Write a short idea, enhance it, then generate a 1024px SDXL image.</p>
+                        </div>
+                        <div class="model-pill">SDXL</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="prompt">Prompt</label>
+                        <textarea id="prompt" placeholder="Example: a realistic studio photo of an orange tabby cat sitting on a windowsill, soft morning light, detailed fur, shallow depth of field, 50mm lens" rows="3"></textarea>
+                    </div>
+
+                    <div class="prompt-tools">
+                        <div class="form-group compact">
+                            <label for="stylePreset">Style</label>
+                            <select id="stylePreset">
+                                <option value="cinematic">Cinematic</option>
+                                <option value="photo">Photo</option>
+                                <option value="portrait">Portrait</option>
+                                <option value="anime">Anime</option>
+                                <option value="concept">Concept Art</option>
+                                <option value="product">Product</option>
+                            </select>
+                        </div>
+                        <button id="enhancePromptBtn" class="btn btn-secondary" type="button">Enhance Prompt</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="negativePrompt">Negative Prompt</label>
+                        <textarea id="negativePrompt" placeholder="What to avoid..." rows="2">blurry, low quality, distorted, deformed, extra limbs, bad anatomy, text, watermark</textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="steps">Steps</label>
+                            <input type="number" id="steps" min="1" max="150" value="30">
+                            <small>Good range for SDXL: 25-40</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="guidance">Guidance Scale</label>
+                            <input type="number" id="guidance" min="1" max="20" step="0.5" value="6.5">
+                            <small>Good range for SDXL: 5-7.5</small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="width">Width</label>
+                            <input type="number" id="width" min="512" max="1024" step="64" value="1024">
+                        </div>
+                        <div class="form-group">
+                            <label for="height">Height</label>
+                            <input type="number" id="height" min="512" max="1024" step="64" value="1024">
+                        </div>
+                    </div>
+
+                    <div class="action-row">
+                        <button id="generateBtn" class="btn btn-primary">Generate Image</button>
+                    </div>
+                    <div id="generateStatus" class="status"></div>
+                </div>
+                <div id="generateResults" class="results"></div>
+            </div>
+
+            <div id="video" class="tab-content">
+                <div class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>Text to Video</h2>
+                            <p>Create a short MP4 clip from a prompt using a lazy-loaded video model.</p>
+                        </div>
+                        <div class="model-pill">MP4</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="videoPrompt">Prompt</label>
+                        <textarea id="videoPrompt" placeholder="Example: a cinematic tracking shot of neon rain falling on a quiet city street, reflections on wet pavement" rows="3"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="videoNegativePrompt">Negative Prompt</label>
+                        <textarea id="videoNegativePrompt" placeholder="What to avoid..." rows="2">blurry, low quality, distorted, flickering, text, watermark, logo</textarea>
+                    </div>
+
+                    <div class="form-row three">
+                        <div class="form-group">
+                            <label for="videoFrames">Frames</label>
+                            <input type="number" id="videoFrames" min="2" max="64" value="16">
+                            <small>16 frames is a practical starting point</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="videoFps">FPS</label>
+                            <input type="number" id="videoFps" min="1" max="30" value="8">
+                        </div>
+                        <div class="form-group">
+                            <label for="videoSteps">Steps</label>
+                            <input type="number" id="videoSteps" min="1" max="100" value="25">
+                        </div>
+                    </div>
+
+                    <div class="form-row three">
+                        <div class="form-group">
+                            <label for="videoWidth">Width</label>
+                            <input type="number" id="videoWidth" min="256" max="1024" step="64" value="576">
+                        </div>
+                        <div class="form-group">
+                            <label for="videoHeight">Height</label>
+                            <input type="number" id="videoHeight" min="256" max="576" step="64" value="320">
+                        </div>
+                        <div class="form-group">
+                            <label for="videoGuidance">Guidance Scale</label>
+                            <input type="number" id="videoGuidance" min="1" max="20" step="0.5" value="9">
+                        </div>
+                    </div>
+
+                    <div class="action-row">
+                        <button id="videoBtn" class="btn btn-primary">Generate Video</button>
+                    </div>
+                    <div id="videoStatus" class="status"></div>
+                </div>
+                <div id="videoResults" class="results"></div>
+            </div>
+
+            <div id="batch" class="tab-content">
+                <div class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>Batch Generation</h2>
+                            <p>Create several variations from the same enhanced prompt.</p>
+                        </div>
+                        <div class="model-pill">1024x1024</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="batchPrompt">Prompt</label>
+                        <textarea id="batchPrompt" placeholder="Example: a realistic studio photo of an orange tabby cat sitting on a windowsill, soft morning light, detailed fur, shallow depth of field, 50mm lens" rows="3"></textarea>
+                    </div>
+
+                    <div class="prompt-tools">
+                        <div class="form-group compact">
+                            <label for="batchStylePreset">Style</label>
+                            <select id="batchStylePreset">
+                                <option value="cinematic">Cinematic</option>
+                                <option value="photo">Photo</option>
+                                <option value="portrait">Portrait</option>
+                                <option value="anime">Anime</option>
+                                <option value="concept">Concept Art</option>
+                                <option value="product">Product</option>
+                            </select>
+                        </div>
+                        <button id="enhanceBatchPromptBtn" class="btn btn-secondary" type="button">Enhance Prompt</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="batchNegativePrompt">Negative Prompt</label>
+                        <textarea id="batchNegativePrompt" placeholder="What to avoid..." rows="2">blurry, low quality, distorted, deformed, extra limbs, bad anatomy, text, watermark</textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="batchCount">Images</label>
+                            <input type="number" id="batchCount" min="1" max="10" value="4">
+                        </div>
+                        <div class="form-group">
+                            <label for="batchSteps">Steps</label>
+                            <input type="number" id="batchSteps" min="1" max="150" value="30">
+                        </div>
+                        <div class="form-group">
+                            <label for="batchGuidance">Guidance Scale</label>
+                            <input type="number" id="batchGuidance" min="1" max="20" step="0.5" value="6.5">
+                        </div>
+                    </div>
+
+                    <button id="batchBtn" class="btn btn-primary">Generate Batch</button>
+                    <div id="batchStatus" class="status"></div>
+                </div>
+                <div id="batchResults" class="results"></div>
+            </div>
+
+            <div id="variation" class="tab-content">
+                <div class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>Create Image Variations</h2>
+                            <p>Upload an image and generate image-to-image variations with the active model.</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="variationPrompt">Prompt</label>
+                        <textarea id="variationPrompt" placeholder="Describe how the variation should look..." rows="2">a beautiful high quality image</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="variationNegativePrompt">Negative Prompt</label>
+                        <textarea id="variationNegativePrompt" placeholder="What to avoid..." rows="2">blurry, low quality, distorted, deformed, extra limbs, bad anatomy, text, watermark</textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="variationStrength">Strength</label>
+                            <input type="number" id="variationStrength" min="0.05" max="1" step="0.05" value="0.75">
+                            <small>Higher values change the source image more</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="variationCount">Images</label>
+                            <input type="number" id="variationCount" min="1" max="10" value="1">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="variationSteps">Steps</label>
+                            <input type="number" id="variationSteps" min="1" max="150" value="50">
+                        </div>
+                        <div class="form-group">
+                            <label for="variationGuidance">Guidance Scale</label>
+                            <input type="number" id="variationGuidance" min="1" max="20" step="0.5" value="7.5">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="variationFile">Upload Image</label>
+                        <input type="file" id="variationFile" accept="image/*">
+                    </div>
+                    <div id="variationPreview" class="preview"></div>
+                    <button id="variationBtn" class="btn btn-primary" disabled>Create Variation</button>
+                    <div id="variationStatus" class="status"></div>
+                </div>
+                <div id="variationResults" class="results"></div>
+            </div>
+
+            <div id="gallery" class="tab-content">
+                <div class="panel">
+                    <div class="panel-heading">
+                        <div>
+                            <h2>Image Gallery</h2>
+                            <p>Review, download, and remove generated images.</p>
+                        </div>
+                    </div>
+                    <div class="gallery-controls">
+                        <button id="refreshGalleryBtn" class="btn btn-secondary">Refresh</button>
+                        <button id="clearGalleryBtn" class="btn btn-danger">Clear All</button>
+                    </div>
+                    <div id="galleryStatus" class="status"></div>
+                </div>
+                <div id="galleryGrid" class="gallery-grid"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
