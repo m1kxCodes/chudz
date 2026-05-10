@@ -45,7 +45,7 @@ python main.py
 - Wait 2-3 minutes for initial model load
 - Watch terminal for progress messages
 
-**Problem: "CUDA out of memory"**
+**Problem: "DirectML out of memory"**
 - Reduce image size (512 → 256)
 - Reduce steps (50 → 20)
 - Restart server
@@ -67,8 +67,9 @@ python main.py
 - **Lower steps = faster** (20-30 steps)
 - **Higher steps = better quality** (75-100 steps)
 
-- **GPU mode is 10x faster** than CPU
-  - If you have NVIDIA GPU, install CUDA toolkit
+- **GPU mode is much faster** than CPU
+  - Default install uses DirectML
+  - NVIDIA CUDA users can install `backend/requirements-cuda.txt`
 
 ## Next Steps
 
