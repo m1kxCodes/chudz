@@ -11,6 +11,9 @@ try:
     import torch_directml
 except ImportError:
     torch_directml = None
+except Exception as e:
+    print(f"Note: torch-directml is unavailable: {e}")
+    torch_directml = None
 import diffusers
 import numpy as np
 import configparser
