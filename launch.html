@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NoFilters - Open App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1a1f3a 100%);
+            color: #f1f5f9;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            text-align: center;
+            max-width: 500px;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: #cbd5e1;
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+        }
+
+        .loading {
+            font-size: 1.2rem;
+            color: #cbd5e1;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #334155;
+            border-top-color: #6366f1;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .status {
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        .status.connecting {
+            background: rgba(99, 102, 241, 0.2);
+            color: #6366f1;
+            border: 1px solid #6366f1;
+        }
+
+        .status.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid #10b981;
+        }
+
+        .status.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid #ef4444;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 30px 0;
+        }
+
+        a, button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(99, 102, 241, 0.2);
+            color: #6366f1;
+            border: 1px solid #6366f1;
+        }
+
+        .btn-secondary:hover {
+            background: #6366f1;
+            color: white;
+        }
+
+        .info-box {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .info-box h3 {
+            color: #6366f1;
+            margin-bottom: 10px;
+        }
+
+        .info-box p {
+            color: #cbd5e1;
+            font-size: 0.95rem;
+            margin-bottom: 8px;
+        }
+
+        .info-box code {
+            background: rgba(15, 23, 42, 0.8);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #a1d8ff;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 NoFilters</h1>
+        <p class="subtitle">AI Image Generator</p>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Checking server...</p>
+        </div>
+
+        <div id="status" class="status connecting hidden"></div>
+
+        <div id="appReady" class="hidden">
+            <div class="button-group">
+                <button class="btn-primary" onclick="openApp()">Open App</button>
+                <button class="btn-secondary" onclick="openAPI()">API Docs</button>
+            </div>
+
+            <div class="info-box">
+                <h3>✨ Features</h3>
+                <p>✓ Text to Image Generation</p>
+                <p>✓ Batch Image Creation</p>
+                <p>✓ Image Variations</p>
+                <p>✓ Gallery & Management</p>
+                <p>✓ No Content Filters</p>
+            </div>
+
+            <div class="info-box">
+                <h3>⚙️ Server Info</h3>
+                <p>Status: <span id="deviceInfo">Loading...</span></p>
+            </div>
+        </div>
+
+        <div id="serverDown" class="hidden">
+            <div class="status error">
+                <h3>Server Not Running</h3>
+                <p>The API server is not responding.</p>
+            </div>
+
+            <div class="info-box">
+                <h3>How to Start</h3>
+                <p><strong>On Windows:</strong></p>
+                <p>Double-click <code>start.bat</code></p>
+                <p style="margin-top: 15px;"><strong>On Mac/Linux:</strong></p>
+                <p>Run <code>bash start.sh</code></p>
+                <p style="margin-top: 15px;">Then refresh this page.</p>
+            </div>
+
+            <button class="btn-primary" style="width: 100%" onclick="location.reload()">Retry Connection</button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        const MAX_RETRIES = 3;
+
+        async function checkServer() {
+            const statusEl = document.getElementById('status');
+            
+            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    const response = await fetch(`${API_URL}/status`, { mode: 'cors' });
+                    if (response.ok) {
+                        const data = await response.json();
+                        showReady(data);
+                        return;
+                    }
+                } catch (error) {
+                    if (attempt < MAX_RETRIES) {
+                        statusEl.classList.remove('hidden');
+                        statusEl.innerHTML = `Connecting... (Attempt ${attempt}/${MAX_RETRIES})`;
+                        statusEl.className = 'status connecting';
+                        await new Promise(r => setTimeout(r, 1000));
+                    }
+                }
+            }
+            
+            showServerDown();
+        }
+
+        function showReady(data) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('serverDown').classList.add('hidden');
+            document.getElementById('appReady').classList.remove('hidden');
+            
+            const deviceName = data.device === 'cuda' ? 
+                `GPU: ${data.gpu_name}` : 
+                'CPU Mode (slower)';
+            
+            document.getElementById('deviceInfo').textContent = deviceName;
+        }
+
+        function showServerDown() {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('appReady').classList.add('hidden');
+            document.getElementById('serverDown').classList.remove('hidden');
+        }
+
+        function openApp() {
+            // Try to detect the frontend path
+            window.location.href = './index.html';
+        }
+
+        function openAPI() {
+            window.open(`${API_URL}/docs`, '_blank');
+        }
+
+        // Check server on load
+        window.addEventListener('load', checkServer);
+    </script>
+</body>
+</html>
