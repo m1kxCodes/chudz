@@ -9,15 +9,16 @@ An AI image generator with **no content restrictions** - generate unlimited crea
 🔄 **Batch Generation** - Create multiple variations at once  
 🎭 **Image Variations** - Create variations of existing images  
 📸 **Gallery** - View, download, and manage all generated images  
-⚡ **GPU Accelerated** - Automatic CUDA support (falls back to CPU)  
+⚡ **GPU Accelerated** - CUDA and DirectML support with CPU fallback  
 🖥️ **Web Interface** - Beautiful, responsive UI  
 🔓 **No Filters** - No content moderation, generate anything  
 
 ## System Requirements
 
 - **Python 3.9+**
-- **NVIDIA GPU** (highly recommended - 6GB+ VRAM for smooth performance)
-  - Supports CUDA for faster generation
+- **GPU** (highly recommended - 6GB+ VRAM for smooth performance)
+  - NVIDIA GPUs can use CUDA
+  - AMD GPUs can use DirectML on Windows
   - Falls back to CPU mode if GPU unavailable
 - **Windows 10+** (or Linux/macOS with Python)
 
@@ -46,6 +47,12 @@ source venv/bin/activate
 ```bash
 cd backend
 pip install -r requirements.txt
+```
+
+`requirements.txt` is the DirectML default. For NVIDIA CUDA instead, run:
+
+```bash
+pip install -r requirements-cuda.txt
 ```
 
 **Note:** First installation may take 10-15 minutes as it downloads the Stable Diffusion model (~4GB).
@@ -110,7 +117,7 @@ Edit `backend/main.py` to customize:
 
 ```python
 MODEL_ID = "runwayml/stable-diffusion-v1-5"  # Model to use
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"  # Auto-detect GPU
+device = auto  # In config.ini: CUDA if available, then DirectML, then CPU
 ```
 
 ### Available Models
@@ -184,7 +191,7 @@ Delete specific image or video
 ## Performance Tips
 
 ### Speed up generation
-1. **Use GPU** - Install CUDA toolkit for NVIDIA GPUs
+1. **Use GPU** - Install the dependency profile for your GPU backend
 2. **Reduce steps** - Lower values (20-30) for faster generation, higher for quality (50-100)
 3. **Use smaller dimensions** - 512x512 is default, use 256x256 for speed
 4. **Reduce guidance scale** - Lower values (3-5) generate faster
@@ -199,7 +206,7 @@ Delete specific image or video
 
 ### "Out of Memory" Error
 ```
-RuntimeError: CUDA out of memory
+RuntimeError: CUDA/DirectML out of memory
 ```
 Solution:
 - Reduce image dimensions (512x512 → 256x256)
@@ -236,8 +243,8 @@ Solution:
 Optional configuration via environment variables:
 
 ```bash
-# Set GPU device (for multi-GPU systems)
-CUDA_VISIBLE_DEVICES=0
+# Override device selection
+NOFILTERS_DEVICE=auto
 
 # Hugging Face token (for private models)
 HUGGINGFACE_API_KEY=hf_...
@@ -268,10 +275,12 @@ GALLERY_PATH=/path/to/gallery
 ### Running with custom settings
 
 ```python
-# In backend/main.py
-DEVICE = "cpu"  # Force CPU mode
+# In config.ini
+device = cpu       # Force CPU mode
 # or
-DEVICE = "cuda"  # Force GPU mode
+device = amd       # Force AMD GPU mode on Windows
+# or
+device = cuda      # Force NVIDIA CUDA mode
 ```
 
 ### Using different models
