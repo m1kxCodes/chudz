@@ -250,7 +250,7 @@
             document.getElementById('serverDown').classList.add('hidden');
             document.getElementById('appReady').classList.remove('hidden');
             
-            const deviceName = data.device === 'cuda' ? 
+            const deviceName = data.gpu_available ? 
                 `GPU: ${data.gpu_name}` : 
                 'CPU Mode (slower)';
             
